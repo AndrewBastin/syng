@@ -20,32 +20,3 @@ impl SyngObjectDef {
         Ok(hash)
     }
 }
-
-pub enum SyngObjectOp {
-    FieldRemove {
-        object_path: String,
-        key: String,
-    },
-
-    FieldSet {
-        object_path: String,
-        key: String,
-        new_value: String,
-    },
-
-    ChildAdd {
-        object_path: String,
-        child_object_id: String,
-    },
-
-    ChildRemove {
-        object_path: String,
-        child_object_id: String,
-    },
-
-    ChildReplace {
-        object_path: String,
-        child_object_id: String,
-        new_child_object_id: String,
-    },
-}
