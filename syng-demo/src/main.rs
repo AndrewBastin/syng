@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use ciborium::ser::into_writer;
 
 use syng::backend::test_backend::SyngTestBackend;
 use syng::backend::SyngBackend;
@@ -37,4 +38,27 @@ fn main() {
     println!("Delta Application on Test:\n{:?}\n", apply_delta(&mut backend2, &delta));
 
     println!("Backend after delta application:\n{:?}\n", backend2);
+
+    let root_obj = backend.get_root_object().unwrap();
+    let mut cbor_vec = Vec::<u8>::new();
+
+    into_writer(&root_obj, &mut cbor_vec).unwrap();
+
+    println!("CBOR Hex for root obj (len: {}):", cbor_vec.len());
+    for byte in cbor_vec.iter() {
+        print!("{:02X} ", byte);
+    }
+
+    println!("\n");
+
+    let mut cbor_vec_delta = Vec::<u8>::new();
+
+    into_writer(&delta, &mut cbor_vec_delta).unwrap();
+
+    println!("CBOR Hex for delta (len: {}):", cbor_vec_delta.len());
+    for byte in cbor_vec_delta.iter() {
+        print!("{:02X} ", byte);
+    }
+
+    println!();
 }
