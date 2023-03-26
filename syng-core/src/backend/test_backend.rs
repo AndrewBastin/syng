@@ -35,6 +35,10 @@ impl Default for SyngTestBackend {
 }
 
 impl SyngBackend for SyngTestBackend {
+    fn has_object(&self, object_id: &str) -> bool {
+        self.object_store.contains_key(object_id)
+    }
+
     fn get_root_object_id(&self) -> Option<String> {
         self.current_root_object_id.clone()
     }

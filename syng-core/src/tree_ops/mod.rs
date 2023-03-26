@@ -22,6 +22,22 @@ fn get_path_nodes_from_path(
     }
 }
 
+pub fn get_descendent_object_ids(backend: &impl SyngBackend, id: &str) -> Option<Vec<String>> {
+    let mut result = vec![];
+
+    // Iterate through the tree using a queue in place of recursion
+    let mut search_queue = vec![id.to_owned()];
+
+    while let Some(object_id) = search_queue.pop() {
+        let obj = backend.read_object(&object_id)?;
+        result.push(object_id);
+
+        search_queue.extend(obj.children);
+    }
+
+    Some(result)
+}
+
 pub fn update_node(
     backend: &mut impl SyngBackend,
     node_path: &str,
