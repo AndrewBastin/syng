@@ -5,22 +5,48 @@ pub enum ChildAdditionPosition {
     AddAt(usize),
 }
 
-fn get_path_nodes_from_path(
+fn get_objects_along_index_path(
     backend: &impl SyngBackend,
-    node_path: &str,
+    node_path: &[usize],
 ) -> Option<Vec<(String, SyngObjectDef)>> {
-    if node_path == "/" {
+    if node_path.is_empty() {
         Some(vec![(
             backend.get_root_object_id()?,
             backend.get_root_object()?,
         )])
     } else {
-        node_path
-            .split("/")
-            .map(|id| Some((id.to_owned(), backend.read_object(id)?)))
-            .collect::<Option<Vec<(String, SyngObjectDef)>>>()
+        let mut objs = Vec::with_capacity(node_path.len() + 1);
+
+        objs.push((backend.get_root_object_id()?, backend.get_root_object()?));
+
+        for index in node_path {
+            let curr_obj = &objs.last()?.1;
+
+            let index_obj_id = curr_obj.children.get(index.clone())?;
+
+            objs.push((index_obj_id.clone(), backend.read_object(index_obj_id)?));
+        }
+
+        Some(objs)
     }
 }
+
+// fn get_path_nodes_from_path(
+//     backend: &impl SyngBackend,
+//     node_path: &str,
+// ) -> Option<Vec<(String, SyngObjectDef)>> {
+//     if node_path == "/" {
+//         Some(vec![(
+//             backend.get_root_object_id()?,
+//             backend.get_root_object()?,
+//         )])
+//     } else {
+//         node_path
+//             .split("/")
+//             .map(|id| Some((id.to_owned(), backend.read_object(id)?)))
+//             .collect::<Option<Vec<(String, SyngObjectDef)>>>()
+//     }
+// }
 
 pub fn get_descendent_object_ids(backend: &impl SyngBackend, id: &str) -> Option<Vec<String>> {
     let mut result = vec![];
@@ -40,10 +66,10 @@ pub fn get_descendent_object_ids(backend: &impl SyngBackend, id: &str) -> Option
 
 pub fn update_node(
     backend: &mut impl SyngBackend,
-    node_path: &str,
+    node_path: &[usize],
     new_def: &SyngObjectDef,
 ) -> Option<(String, SyngObjectDef)> {
-    let ancestor_nodes = get_path_nodes_from_path(backend, node_path)?;
+    let ancestor_nodes = get_objects_along_index_path(backend, node_path)?;
 
     // Write the new object into the backend
     let hash = backend.write_object(&new_def).ok()?;
@@ -75,11 +101,11 @@ pub fn update_node(
 
 pub fn add_child_node(
     backend: &mut impl SyngBackend,
-    parent_node_path: &str,
+    parent_node_path: &[usize],
     new_def: &SyngObjectDef,
     position: ChildAdditionPosition,
 ) -> Option<(String, SyngObjectDef)> {
-    let ancestor_nodes = get_path_nodes_from_path(backend, parent_node_path)?;
+    let ancestor_nodes = get_objects_along_index_path(backend, parent_node_path)?;
 
     let hash = backend.write_object(&new_def).ok()?;
 
@@ -119,8 +145,8 @@ pub fn add_child_node(
     Some((hash, new_def.clone()))
 }
 
-pub fn remove_child_node(backend: &mut impl SyngBackend, node_path: &str) -> Option<()> {
-    let ancestor_nodes = get_path_nodes_from_path(backend, node_path)?;
+pub fn remove_child_node(backend: &mut impl SyngBackend, node_path: &[usize]) -> Option<()> {
+    let ancestor_nodes = get_objects_along_index_path(backend, node_path)?;
 
     // Since we are removing a child node, we have to make sure atleast 2 nodes are there in the
     // path (the root and the given node)
