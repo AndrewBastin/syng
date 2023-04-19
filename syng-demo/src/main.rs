@@ -1,64 +1,119 @@
-use std::collections::HashMap;
-use ciborium::ser::into_writer;
+#![allow(non_snake_case)]
+use std::time::SystemTime;
 
-use syng::backend::test_backend::SyngTestBackend;
-use syng::backend::SyngBackend;
-use syng::objects::SyngObjectDef;
-use syng::delta::{generate_delta_from_point, apply_delta};
-use syng::tree_ops::{add_child_node, ChildAdditionPosition};
+use components::Collection;
+use data::CollectionData;
+
+use dioxus::prelude::*;
+use dioxus_desktop::{Config, WindowBuilder};
+use sync::ObjectGen;
+
+use crate::{
+    data::RequestData,
+    utils::{get_collection_mut, get_random_request_content, path_to_string},
+};
+
+mod components;
+mod data;
+mod sync;
+mod utils;
 
 fn main() {
-    // Write a test program that uses the SyngTestBackend to generate a tree and generate delta between two tree states
-    let mut backend = SyngTestBackend::default();
+    hot_reload_init!();
 
-    let initial_root_node_id = backend.get_root_object_id().unwrap();
+    dioxus_desktop::launch_cfg(
+        App,
+        Config::default().with_window(WindowBuilder::default().with_title("Syng Demo")),
+    );
+}
 
-    println!("Initial backend:\n{:?}\n", backend);
-    
-    let mut test_map = HashMap::new();
-    test_map.insert("name".to_owned(), "Andrew".to_owned());
+fn App(cx: Scope) -> Element {
+    let root_collections = use_state(cx, || Vec::<CollectionData>::new());
 
-    let new_test_node = SyngObjectDef {
-        fields: test_map,
-        children: vec![],
-    };
+    // Get current system time
+    let gen_start_time = SystemTime::now();
 
-    add_child_node(&mut backend, "/", &new_test_node, ChildAdditionPosition::AddToEnd);
+    let gen_object = ObjectGen::from(root_collections.get());
 
+    let gen_end_time = SystemTime::now();
 
-    println!("Backend after node change:\n{:?}\n", backend);
+    let gen_time_ms = gen_end_time
+        .duration_since(gen_start_time)
+        .unwrap()
+        .as_millis();
 
-    let delta = generate_delta_from_point(&backend, &initial_root_node_id).unwrap();
-    println!("Generated delta:\n{:?}\n", delta);
+    let gen_obj_string = serde_json::to_string_pretty(&gen_object).unwrap();
 
-    let mut backend2 = SyngTestBackend::default();
-    
-    println!("New Backend:\n{:?}\n", backend2);
+    cx.render(rsx! {
+        div {
+            style { include_str!("./style.css") }
 
-    println!("Delta Application on Test:\n{:?}\n", apply_delta(&mut backend2, &delta));
+            div {
+                class: "debug-panel",
 
-    println!("Backend after delta application:\n{:?}\n", backend2);
+                h3 { "Debug Info" }
 
-    let root_obj = backend.get_root_object().unwrap();
-    let mut cbor_vec = Vec::<u8>::new();
+                p { "Tree Gen took {gen_time_ms}ms" }
 
-    into_writer(&root_obj, &mut cbor_vec).unwrap();
+                pre {
+                    "{gen_obj_string}"
+                }
+            }
 
-    println!("CBOR Hex for root obj (len: {}):", cbor_vec.len());
-    for byte in cbor_vec.iter() {
-        print!("{:02X} ", byte);
-    }
+            div {
+                class: "colls-panel",
 
-    println!("\n");
+                button {
+                    onclick: move |_| {
+                        (*root_collections).make_mut().push(CollectionData::new(format!("Collection {}", root_collections.len())));
+                    },
+                    "Add Root Collection"
+                }
 
-    let mut cbor_vec_delta = Vec::<u8>::new();
+                for (index, coll) in root_collections.iter().enumerate() {
+                    Collection {
+                        path: vec![index],
+                        coll: coll,
+                        on_add_folder: move |path| {
+                            let mut root_colls_ref = root_collections.make_mut();
+                            let coll = get_collection_mut(&mut *root_colls_ref, &path).unwrap();
 
-    into_writer(&delta, &mut cbor_vec_delta).unwrap();
+                            coll.folders.push(CollectionData::new(format!("Subfolder {}/{}", path_to_string(&path), coll.folders.len())));
+                        },
+                        on_add_request: move |path| {
+                            let mut root_colls_ref = root_collections.make_mut();
+                            let coll = get_collection_mut(&mut *root_colls_ref, &path).unwrap();
 
-    println!("CBOR Hex for delta (len: {}):", cbor_vec_delta.len());
-    for byte in cbor_vec_delta.iter() {
-        print!("{:02X} ", byte);
-    }
+                            coll.requests.push(RequestData {
+                                title: format!("Request {}/[{}]", path_to_string(&path), coll.requests.len()),
+                                content: get_random_request_content(),
+                            });
+                        },
+                        on_delete_folder: move |path: Vec<usize>| {
+                            let mut root_colls_ref = root_collections.make_mut();
 
-    println!();
+                            if path.len() == 1 {
+                                (*root_colls_ref).remove(path.last().unwrap().clone());
+
+                                return;
+                            }
+
+                            let (containing_path_slice, index_slice) = path.split_at(path.len() - 1);
+
+                            let containing_coll = get_collection_mut(&mut *root_colls_ref, &Vec::from(containing_path_slice)).unwrap();
+                            let index = index_slice.first().unwrap().clone();
+
+                            containing_coll.folders.remove(index);
+                        },
+                        on_delete_request: move |(path, index)| {
+                            let mut root_colls_ref = root_collections.make_mut();
+                            let coll = get_collection_mut(&mut *root_colls_ref, &path).unwrap();
+
+                            coll.requests.remove(index);
+                        }
+                    }
+                }
+            }
+        }
+    })
 }

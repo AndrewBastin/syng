@@ -1,0 +1,16 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+#main,
+#main > div {
+  height: 100%;
+}
+
+.debug-panel {
+  float: left;
+  height: 100%;
+  border-right: #101010 dotted 2px;
+}
