@@ -1,4 +1,4 @@
-use std::collections::{HashMap, BTreeSet};
+use std::collections::{BTreeSet, HashMap};
 
 use serde::{Deserialize, Serialize};
 
@@ -6,12 +6,12 @@ use crate::{backend::SyngBackend, objects::SyngObjectDef, tree_ops::get_descende
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SyngDelta {
-    start_point: String,
-    new_root_node: String,
-    new_objects: HashMap<String, SyngObjectDef>,
+    pub start_point: Option<String>,
+    pub new_root_node: String,
+    pub new_objects: HashMap<String, SyngObjectDef>,
 }
 
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum ApplyDeltaError {
     /// The current tree in the backend drifted from the starting point in the delta
     CurrentTreeDrifted,
@@ -25,10 +25,8 @@ pub enum ApplyDeltaError {
 
 fn validate_delta(backend: &impl SyngBackend, delta: &SyngDelta) -> Result<(), ApplyDeltaError> {
     // Check if start point is the current root tree of the backend
-    if let Some(root_node_id) = backend.get_root_object_id() {
-        if root_node_id != delta.start_point {
-            return Err(ApplyDeltaError::CurrentTreeDrifted);
-        }
+    if backend.get_root_object_id() != delta.start_point {
+        return Err(ApplyDeltaError::CurrentTreeDrifted);
     }
 
     // Check if new_root_node is in the new_objects list
@@ -85,10 +83,10 @@ pub fn generate_delta_from_point(
     past_head_object_id: &str,
 ) -> Option<SyngDelta> {
     // Storing this into a BTreeSet so that we can binary search through the objects
-    let past_tree_object_ids: BTreeSet<String> = get_descendent_object_ids(backend, past_head_object_id)?
-        .into_iter()
-        .collect();
-
+    let past_tree_object_ids: BTreeSet<String> =
+        get_descendent_object_ids(backend, past_head_object_id)?
+            .into_iter()
+            .collect();
 
     let current_head_id = backend.get_root_object_id()?;
     let current_tree_object_ids = get_descendent_object_ids(backend, &current_head_id)?;
@@ -102,9 +100,9 @@ pub fn generate_delta_from_point(
             (obj_id.clone(), obj)
         })
         .collect::<HashMap<String, SyngObjectDef>>();
-    
+
     Some(SyngDelta {
-        start_point: past_head_object_id.to_string(),
+        start_point: Some(past_head_object_id.to_string()),
         new_root_node: current_head_id,
         new_objects,
     })

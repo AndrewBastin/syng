@@ -1,0 +1,10 @@
+[package]
+name = "syng-demo-backend"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+actix-web = "4.3.1"
+anyhow = "1.0.70"
+syng = { path = "../syng-core/" }
+syng-demo-common = { path = "../syng-demo-common/" }

@@ -1,11 +1,11 @@
 use anyhow::Result;
 use ciborium::ser::into_writer;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SyngObjectDef {
-    pub fields: HashMap<String, String>,
+    pub fields: BTreeMap<String, String>,
     pub children: Vec<String>,
 }
 

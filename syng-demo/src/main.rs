@@ -2,19 +2,16 @@
 use std::time::SystemTime;
 
 use components::Collection;
-use data::CollectionData;
 
 use dioxus::prelude::*;
 use dioxus_desktop::{Config, WindowBuilder};
-use sync::ObjectGen;
+use sync::backend::DemoFEBackend;
 
-use crate::{
-    data::RequestData,
-    utils::{get_collection_mut, get_random_request_content, path_to_string},
-};
+use syng_demo_common::{CollectionData, RequestData};
+
+use crate::utils::{get_random_request_content, path_to_string};
 
 mod components;
-mod data;
 mod sync;
 mod utils;
 
@@ -28,21 +25,61 @@ fn main() {
 }
 
 fn App(cx: Scope) -> Element {
-    let root_collections = use_state(cx, || Vec::<CollectionData>::new());
+    let backend = use_ref(cx, || DemoFEBackend::default());
 
-    // Get current system time
-    let gen_start_time = SystemTime::now();
+    let gen_tree_start = SystemTime::now();
 
-    let gen_object = ObjectGen::from(root_collections.get());
+    let root_colls = backend
+        .read()
+        .get_collection_tree()
+        .expect("Collection Tree Parse Failed");
 
-    let gen_end_time = SystemTime::now();
-
-    let gen_time_ms = gen_end_time
-        .duration_since(gen_start_time)
+    let gen_tree_end = SystemTime::now();
+    let gen_tree_duration = gen_tree_end
+        .duration_since(gen_tree_start)
         .unwrap()
         .as_millis();
 
-    let gen_obj_string = serde_json::to_string_pretty(&gen_object).unwrap();
+    let tree_info = backend
+        .read()
+        .generate_gen_info()
+        .expect("Failed generating tree gen info");
+
+    let tree_info_str =
+        serde_json::to_string_pretty(&tree_info).expect("Failed converting tree gen info to JSON");
+
+    let root_colls_len = root_colls.len();
+
+    let root_colls_tree = root_colls.iter().enumerate().map(|(index, coll)| {
+        rsx! {
+            Collection {
+                path: vec![index],
+                coll: coll.clone(),
+                on_add_folder: move |path: Vec<usize>| {
+                    let coll = backend.read().get_collection(&path).unwrap();
+
+                    let data = CollectionData::new(format!("Subfolder {}/{}", path_to_string(&path), coll.folders.len()));
+                    backend.write().add_folder(&path, data).expect("Add Folder failed");
+                },
+                on_add_request: move |path: Vec<usize>| {
+                    let coll = backend.read().get_collection(&path).unwrap();
+
+                    let data = RequestData {
+                        title: format!("Request {}/[{}]", path_to_string(&path), coll.requests.len()),
+                        content: get_random_request_content(),
+                    };
+
+                    backend.write().add_request(&path, data).expect("Add request Failed");
+                },
+                on_delete_folder: move |path: Vec<usize>| {
+                    backend.write().delete_folder(&path).expect("Delete folder failed");
+                },
+                on_delete_request: move |(path, index): (Vec<usize>, usize)| {
+                    backend.write().delete_request(&path, index).expect("Delete request failed");
+                }
+            }
+        }
+    });
 
     cx.render(rsx! {
         div {
@@ -51,12 +88,65 @@ fn App(cx: Scope) -> Element {
             div {
                 class: "debug-panel",
 
-                h3 { "Debug Info" }
+                details {
+                    summary {
+                        "Local Repo Info"
+                    }
 
-                p { "Tree Gen took {gen_time_ms}ms" }
+                    "Tree gen took {gen_tree_duration}ms"
 
-                pre {
-                    "{gen_obj_string}"
+                    br {}
+
+                    button {
+                        onclick: move |_| {
+                            backend.with_mut(|bk| {
+                                bk.drop_unreachable_objects().expect("Drop failed");
+                            })
+                        },
+
+                        "Drop Unreachable"
+                    }
+
+                    br {}
+
+                    "Local repo data:"
+                    pre {
+                        tree_info_str
+                    }
+                }
+
+                br {}
+                br {}
+                br {}
+
+                details {
+                    summary {
+                        "Remote Repo Info"
+                    }
+
+                    button {
+                        onclick: move |_| {
+                            // Try pull remote changes
+                        },
+
+                        "Pull from Remote"
+                    }
+
+                    button {
+                        onclick: move |_| {
+                            // Try push to remote
+                        },
+
+                        "Push to Remote"
+                    }
+
+                    button {
+                        onclick: move |_| {
+                            // Revert to last pull
+                        },
+
+                        "Revert to last pull"
+                    }
                 }
             }
 
@@ -65,55 +155,15 @@ fn App(cx: Scope) -> Element {
 
                 button {
                     onclick: move |_| {
-                        (*root_collections).make_mut().push(CollectionData::new(format!("Collection {}", root_collections.len())));
+                        backend.with_mut(|bk| {
+                            bk.add_root_collection(CollectionData::new(format!("Collection {}", root_colls_len)))
+                                .expect("Add root collection failed");
+                        });
                     },
                     "Add Root Collection"
                 }
 
-                for (index, coll) in root_collections.iter().enumerate() {
-                    Collection {
-                        path: vec![index],
-                        coll: coll,
-                        on_add_folder: move |path| {
-                            let mut root_colls_ref = root_collections.make_mut();
-                            let coll = get_collection_mut(&mut *root_colls_ref, &path).unwrap();
-
-                            coll.folders.push(CollectionData::new(format!("Subfolder {}/{}", path_to_string(&path), coll.folders.len())));
-                        },
-                        on_add_request: move |path| {
-                            let mut root_colls_ref = root_collections.make_mut();
-                            let coll = get_collection_mut(&mut *root_colls_ref, &path).unwrap();
-
-                            coll.requests.push(RequestData {
-                                title: format!("Request {}/[{}]", path_to_string(&path), coll.requests.len()),
-                                content: get_random_request_content(),
-                            });
-                        },
-                        on_delete_folder: move |path: Vec<usize>| {
-                            let mut root_colls_ref = root_collections.make_mut();
-
-                            if path.len() == 1 {
-                                (*root_colls_ref).remove(path.last().unwrap().clone());
-
-                                return;
-                            }
-
-                            let (containing_path_slice, index_slice) = path.split_at(path.len() - 1);
-
-                            let containing_coll = get_collection_mut(&mut *root_colls_ref, &Vec::from(containing_path_slice)).unwrap();
-                            let index = index_slice.first().unwrap().clone();
-
-                            containing_coll.folders.remove(index);
-                        },
-                        on_delete_request: move |(path, index)| {
-                            let mut root_colls_ref = root_collections.make_mut();
-                            let coll = get_collection_mut(&mut *root_colls_ref, &path).unwrap();
-
-                            coll.requests.remove(index);
-                        }
-                    }
-                }
+                root_colls_tree
             }
-        }
-    })
+    }})
 }

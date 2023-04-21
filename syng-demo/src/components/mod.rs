@@ -1,13 +1,13 @@
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
+use syng_demo_common::{CollectionData, RequestData};
 
-use crate::data::{CollectionData, RequestData};
 use crate::utils::path_to_string;
 
 #[derive(Props)]
 pub struct CollectionProps<'a> {
     path: Vec<usize>,
-    coll: &'a CollectionData,
+    coll: CollectionData,
     on_add_folder: EventHandler<'a, Vec<usize>>,
     on_delete_folder: EventHandler<'a, Vec<usize>>,
     on_add_request: EventHandler<'a, Vec<usize>>,
@@ -47,7 +47,7 @@ pub fn Collection<'a>(cx: Scope<'a, CollectionProps<'a>>) -> Element<'a> {
                 for (i, folder) in cx.props.coll.folders.iter().enumerate() {
                     Collection {
                         path: [cx.props.path.clone(), vec![i]].concat(),
-                        coll: folder,
+                        coll: folder.clone(),
                         on_add_folder: move |path| {
                             cx.props.on_add_folder.call(path);
                         },

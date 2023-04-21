@@ -5,6 +5,27 @@ pub enum ChildAdditionPosition {
     AddAt(usize),
 }
 
+pub fn get_object_at_path(
+    backend: &impl SyngBackend,
+    node_path: &[usize],
+) -> Option<(String, SyngObjectDef)> {
+    if node_path.is_empty() {
+        Some((backend.get_root_object_id()?, backend.get_root_object()?))
+    } else {
+        let mut last_obj = (backend.get_root_object_id()?, backend.get_root_object()?);
+
+        for index in node_path {
+            let curr_obj = &last_obj.1;
+
+            let index_obj_id = curr_obj.children.get(index.clone())?;
+
+            last_obj = (index_obj_id.clone(), backend.read_object(index_obj_id)?);
+        }
+
+        Some(last_obj)
+    }
+}
+
 fn get_objects_along_index_path(
     backend: &impl SyngBackend,
     node_path: &[usize],
@@ -31,23 +52,6 @@ fn get_objects_along_index_path(
     }
 }
 
-// fn get_path_nodes_from_path(
-//     backend: &impl SyngBackend,
-//     node_path: &str,
-// ) -> Option<Vec<(String, SyngObjectDef)>> {
-//     if node_path == "/" {
-//         Some(vec![(
-//             backend.get_root_object_id()?,
-//             backend.get_root_object()?,
-//         )])
-//     } else {
-//         node_path
-//             .split("/")
-//             .map(|id| Some((id.to_owned(), backend.read_object(id)?)))
-//             .collect::<Option<Vec<(String, SyngObjectDef)>>>()
-//     }
-// }
-
 pub fn get_descendent_object_ids(backend: &impl SyngBackend, id: &str) -> Option<Vec<String>> {
     let mut result = vec![];
 
@@ -57,6 +61,22 @@ pub fn get_descendent_object_ids(backend: &impl SyngBackend, id: &str) -> Option
     while let Some(object_id) = search_queue.pop() {
         let obj = backend.read_object(&object_id)?;
         result.push(object_id);
+
+        search_queue.extend(obj.children);
+    }
+
+    Some(result)
+}
+
+pub fn get_descendent_objects(backend: &impl SyngBackend, id: &str) -> Option<Vec<SyngObjectDef>> {
+    let mut result = vec![];
+
+    // Iterate through the tree using a queue in place of recursion
+    let mut search_queue = vec![id.to_owned()];
+
+    while let Some(object_id) = search_queue.pop() {
+        let obj = backend.read_object(&object_id)?;
+        result.push(obj.clone());
 
         search_queue.extend(obj.children);
     }
@@ -124,15 +144,12 @@ pub fn add_child_node(
     let mut last_parent_node_id = backend.write_object(&new_parent).ok()?;
 
     // Applying the changes to the entire tree
-    for (_, node) in ancestor_nodes.iter().rev().skip(1) {
+    for (index, (_, node)) in ancestor_nodes.iter().enumerate().rev().skip(1) {
         let mut new_node = node.clone();
 
-        let index = new_node
-            .children
-            .iter()
-            .position(|node_id| node_id == &last_parent_node_id)?;
+        let node_index = parent_node_path[index];
 
-        new_node.children[index] = last_parent_node_id;
+        new_node.children[node_index] = last_parent_node_id;
 
         let new_hash = backend.write_object(&new_node).ok()?;
 
@@ -153,32 +170,26 @@ pub fn remove_child_node(backend: &mut impl SyngBackend, node_path: &[usize]) ->
     let [
         remaining_ancestors @ ..,
         (_, parent_node),
-        (to_delete_node_id, _)
+        _
     ] = ancestor_nodes.as_slice() else {
         return None;
     };
 
     let mut new_parent_node = parent_node.clone();
 
-    let index = new_parent_node
-        .children
-        .iter()
-        .position(|id| id == to_delete_node_id)?;
+    let delete_index = node_path.last().unwrap().clone();
 
-    new_parent_node.children.remove(index);
+    new_parent_node.children.remove(delete_index);
 
     let mut last_parent_node_id = backend.write_object(&new_parent_node).ok()?;
 
     // Applying the changes to the entire tree
-    for (_, node) in remaining_ancestors.iter().rev() {
+    for (index, (_, node)) in remaining_ancestors.iter().enumerate().rev() {
         let mut new_node = node.clone();
 
-        let index = new_node
-            .children
-            .iter()
-            .position(|node_id| node_id == &last_parent_node_id)?;
+        let update_index = node_path[index];
 
-        new_node.children[index] = last_parent_node_id;
+        new_node.children[update_index] = last_parent_node_id;
 
         let new_hash = backend.write_object(&new_node).ok()?;
 

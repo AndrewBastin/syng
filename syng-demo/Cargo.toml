@@ -7,9 +7,12 @@ edition = "2021"
 
 [dependencies]
 syng = { path = "../syng-core/" }
+syng-demo-common = { path = "../syng-demo-common/" }
 ciborium = "0.2.0"
 dioxus = "0.3.2"
 dioxus-desktop = "0.3.0"
 random-string = "1.0.0"
 serde = "1.0.160"
 serde_json = "1.0.96"
+reqwest = { version = "0.11.16", features = ["json"] }
+anyhow = "1.0.70"

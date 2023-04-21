@@ -1,5 +1,7 @@
 [workspace]
 members = [
   "syng-core",
+  "syng-demo-common",
   "syng-demo",
+  "syng-demo-backend"
 ]
