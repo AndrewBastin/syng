@@ -7,11 +7,16 @@ use dioxus::prelude::*;
 use dioxus_desktop::{Config, WindowBuilder};
 use sync::backend::DemoFEBackend;
 
+use syng::{backend::SyngBackend, delta::apply_delta};
 use syng_demo_common::{CollectionData, RequestData};
 
-use crate::utils::{get_random_request_content, path_to_string};
+use crate::{
+    remote::{pull_full_from_remote, push_to_remote},
+    utils::{get_random_request_content, path_to_string},
+};
 
 mod components;
+mod remote;
 mod sync;
 mod utils;
 
@@ -24,8 +29,31 @@ fn main() {
     );
 }
 
+#[derive(Clone)]
+struct RemoteSyncLogItem {
+    op: String,
+    result: String,
+}
+
 fn App(cx: Scope) -> Element {
+    let last_known_remote_root_id = use_state(cx, || -> Option<String> { None });
+    let last_synced_remote_root_id = use_state(cx, || -> Option<String> { None });
+
+    let remote_sync_log = use_ref(cx, || Vec::<RemoteSyncLogItem>::new());
+
     let backend = use_ref(cx, || DemoFEBackend::default());
+
+    let is_repo_even_with_remote = {
+        let backend_root_id = backend.read().get_root_object_id();
+        let last_known_remote_root_id = last_known_remote_root_id.get();
+
+        match (&backend_root_id, last_known_remote_root_id) {
+            (Some(backend_root_id), Some(last_known_remote_root_id)) => {
+                Some(backend_root_id == last_known_remote_root_id)
+            }
+            _ => None,
+        }
+    };
 
     let gen_tree_start = SystemTime::now();
 
@@ -100,7 +128,7 @@ fn App(cx: Scope) -> Element {
                     button {
                         onclick: move |_| {
                             backend.with_mut(|bk| {
-                                bk.drop_unreachable_objects().expect("Drop failed");
+                                bk.drop_unreachable_objects(&*last_known_remote_root_id).expect("Drop failed");
                             })
                         },
 
@@ -124,9 +152,67 @@ fn App(cx: Scope) -> Element {
                         "Remote Repo Info"
                     }
 
+                    "Last Known Remote ID: {*last_known_remote_root_id:?}"
+
+                    br {}
+
+                    "Last Synced Remote ID: {*last_synced_remote_root_id:?}"
+
+                    br {}
+
                     button {
                         onclick: move |_| {
-                            // Try pull remote changes
+                            let lk_remote_root_id = last_known_remote_root_id.clone();
+
+                            cx.spawn({
+                                let log = remote_sync_log.to_owned();
+
+                                async move {
+                                    let result = pull_full_from_remote().await.expect("Pull failed");
+
+                                    lk_remote_root_id.set(result.root_obj_id.clone());
+
+                                    log.with_mut(|log| {
+                                        log.push(RemoteSyncLogItem {
+                                            op: "Pull Received (not applied)".to_owned(),
+                                            result: serde_json::to_string_pretty(&result).unwrap()
+                                        });
+                                    });
+                                }
+                            });
+                        },
+
+                        "Get backend state (full pull; no apply)"
+                    }
+
+                    button {
+                        onclick: move |_| {
+                            let ls_remote_root_id = last_synced_remote_root_id.clone();
+                            let lk_remote_root_id = last_synced_remote_root_id.clone();
+
+                            cx.spawn({
+                                let back = backend.to_owned();
+                                let log = remote_sync_log.to_owned();
+
+                                async move {
+                                    let result = pull_full_from_remote().await.expect("Pull failed");
+
+                                    back.with_mut(|bk| {
+                                        bk.apply_full_pull(&result).expect("Pull write failed");
+
+                                        let root_id = bk.get_root_object_id().clone();
+                                        lk_remote_root_id.set(root_id.clone());
+                                        ls_remote_root_id.set(root_id);
+                                    });
+
+                                    log.with_mut(|log| {
+                                        log.push(RemoteSyncLogItem {
+                                            op: "Pull Received".to_owned(),
+                                            result: serde_json::to_string_pretty(&result).unwrap()
+                                        });
+                                    });
+                                }
+                            })
                         },
 
                         "Pull from Remote"
@@ -134,7 +220,29 @@ fn App(cx: Scope) -> Element {
 
                     button {
                         onclick: move |_| {
-                            // Try push to remote
+                            let back = backend.clone();
+                            let last_sync_point = last_synced_remote_root_id.clone();
+                            let last_known_bk_point = last_known_remote_root_id.clone();
+                            let log = remote_sync_log.to_owned();
+
+                            let delta = backend.read().get_delta_for_pushing(&last_sync_point.get().clone().unwrap()).unwrap();
+
+                            cx.spawn({
+                                async move {
+                                    push_to_remote(&delta).await.expect("Push to remote failed");
+
+                                    log.with_mut(|lg| {
+                                        lg.push(RemoteSyncLogItem {
+                                            op: "Push to remote success".to_owned(),
+                                            result: serde_json::to_string_pretty(&delta).unwrap()
+                                        });
+                                    });
+
+                                    let curr_root = back.read().get_root_object_id();
+                                    last_sync_point.set(curr_root.clone());
+                                    last_known_bk_point.set(curr_root);
+                                }
+                            })
                         },
 
                         "Push to Remote"
@@ -146,6 +254,32 @@ fn App(cx: Scope) -> Element {
                         },
 
                         "Revert to last pull"
+                    }
+
+                    br {}
+
+                    button {
+                        onclick: move |_| {
+                            //
+                        }
+                    }
+
+
+                    br {}
+                    br {}
+
+                    details {
+                        summary { "Operation Log" }
+
+                        for obj in remote_sync_log.read().iter().cloned() {
+                            div {
+                                "Operation: {obj.op}"
+                                br {}
+                                pre {
+                                    obj.result
+                                }
+                            }
+                        }
                     }
                 }
             }

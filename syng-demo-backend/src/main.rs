@@ -1,5 +1,5 @@
 use anyhow::{bail, Result};
-use std::{collections::HashMap, sync::RwLock, time::SystemTime};
+use std::{collections::{HashMap, BTreeMap}, sync::RwLock, time::SystemTime};
 
 use actix_web::{get, middleware::Logger, web, App, HttpServer, Responder, post};
 use syng::{
@@ -14,6 +14,26 @@ use syng_demo_common::backend::{
 struct DataBackend {
     objects: HashMap<String, SyngObjectDef>,
     root_object_id: Option<String>
+}
+
+impl Default for DataBackend {
+    fn default() -> Self {
+        let root_obj = SyngObjectDef {
+            fields: BTreeMap::new(),
+            children: vec![],
+        };
+
+        let root_hash = root_obj.get_hash().unwrap();
+
+        let objects = HashMap::from([
+            (root_hash.clone(), root_obj)
+        ]);
+
+        Self {
+            objects,
+            root_object_id: Some(root_hash)
+        }
+    }
 }
 
 struct BackendState {
@@ -152,12 +172,7 @@ async fn push(delta: web::Json<SyngDelta>, state: web::Data<BackendState>) -> im
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let app_state = web::Data::new(BackendState {
-        data: RwLock::new(
-                  DataBackend { 
-                      objects: HashMap::new(), 
-                      root_object_id: None 
-                  }
-            )
+        data: RwLock::new(DataBackend::default())
     });
 
     HttpServer::new(move || {

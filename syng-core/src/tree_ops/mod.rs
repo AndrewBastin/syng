@@ -180,7 +180,7 @@ pub fn remove_child_node(backend: &mut impl SyngBackend, node_path: &[usize]) ->
     let delete_index = node_path.last().unwrap().clone();
 
     new_parent_node.children.remove(delete_index);
-
+    
     let mut last_parent_node_id = backend.write_object(&new_parent_node).ok()?;
 
     // Applying the changes to the entire tree

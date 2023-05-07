@@ -1,12 +1,16 @@
 use anyhow::{bail, Result};
-use syng_demo_common::{CollectionData, RequestData};
+use syng_demo_common::{backend::BackendFullPullResult, CollectionData, RequestData};
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 
 use syng::{
     backend::SyngBackend,
+    delta::{generate_delta_from_point, SyngDelta},
     objects::SyngObjectDef,
-    tree_ops::{add_child_node, get_object_at_path, remove_child_node, ChildAdditionPosition},
+    tree_ops::{
+        add_child_node, get_descendent_object_ids, get_object_at_path, remove_child_node,
+        ChildAdditionPosition,
+    },
 };
 
 use super::treegen::{generate_object_for_coll, generate_object_for_req, ObjectGen};
@@ -76,22 +80,34 @@ impl Default for DemoFEBackend {
 }
 
 impl DemoFEBackend {
-    pub fn drop_unreachable_objects(&mut self) -> Result<()> {
-        let mut active_objects = BTreeSet::new();
-
-        let mut search_queue = VecDeque::from([self.get_root_object_id().expect("No root object")]);
-
-        while let Some(obj_hash) = &search_queue.pop_front() {
-            active_objects.insert(obj_hash.clone());
-
-            let obj = self.read_object(&obj_hash.clone()).unwrap();
-
-            active_objects.extend(obj.children.iter().cloned());
-
-            search_queue.extend(obj.children.into_iter());
+    pub fn apply_full_pull(&mut self, data: &BackendFullPullResult) -> Result<()> {
+        for obj in &data.objects {
+            self.write_object(&obj).expect("Pull object write failed");
         }
 
-        self.objects.retain(|hash, _| active_objects.contains(hash));
+        self.root_id = data.root_obj_id.clone();
+
+        Ok(())
+    }
+
+    pub fn get_delta_for_pushing(&self, past_point: &str) -> Result<SyngDelta> {
+        let delta = generate_delta_from_point(self, &past_point).expect("Delta gen failed");
+
+        Ok(delta)
+    }
+
+    pub fn drop_unreachable_objects(&mut self, last_sync_point: &Option<String>) -> Result<()> {
+        let active_objects =
+            get_descendent_object_ids(self, &self.get_root_object_id().unwrap()).unwrap();
+
+        let sync_point_active_objects = match last_sync_point {
+            Some(past_point) => get_descendent_object_ids(self, past_point).unwrap(),
+            None => vec![],
+        };
+
+        self.objects.retain(|hash, _| {
+            active_objects.contains(hash) || sync_point_active_objects.contains(hash)
+        });
 
         Ok(())
     }
