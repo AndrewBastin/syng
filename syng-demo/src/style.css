@@ -7,14 +7,17 @@ body {
 #main,
 #main > div {
   height: 100%;
+  width: 100%;
+  display: flex;
 }
 
 .debug-panel {
-  float: left;
   height: 100%;
   border-right: #101010 dotted 2px;
   min-height: 100%;
   max-height: 100%;
+  max-width: 50%;
+  flex: 1;
   overflow: auto;
 }
 

@@ -41,7 +41,7 @@ pub fn Collection<'a>(cx: Scope<'a, CollectionProps<'a>>) -> Element<'a> {
 
             div {
                 style: r#"
-                    margin-left: 10px;
+                    padding-left: 10px;
                 "#,
 
                 for (i, folder) in cx.props.coll.folders.iter().enumerate() {

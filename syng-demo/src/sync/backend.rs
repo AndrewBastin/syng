@@ -8,7 +8,7 @@ use syng::{
     delta::{generate_delta_from_point, SyngDelta},
     objects::SyngObjectDef,
     tree_ops::{
-        add_child_node, get_descendent_object_ids, get_object_at_path, remove_child_node,
+        add_child_object, get_descendent_object_ids, get_object_at_path, remove_child_object,
         ChildAdditionPosition,
     },
 };
@@ -199,7 +199,7 @@ impl DemoFEBackend {
             self.write_object(obj)?;
         }
 
-        add_child_node(
+        add_child_object(
             self,
             &[],
             &coll_obj,
@@ -238,7 +238,7 @@ impl DemoFEBackend {
             self.write_object(obj)?;
         }
 
-        add_child_node(self, coll_path, &coll_obj, add_pos).expect("Write folder failed");
+        add_child_object(self, coll_path, &coll_obj, add_pos).expect("Write folder failed");
 
         Ok(())
     }
@@ -246,14 +246,14 @@ impl DemoFEBackend {
     pub fn add_request(&mut self, path: &[usize], def: RequestData) -> Result<()> {
         let req_obj = generate_object_for_req(&def);
 
-        add_child_node(self, path, &req_obj, ChildAdditionPosition::AddToEnd)
+        add_child_object(self, path, &req_obj, ChildAdditionPosition::AddToEnd)
             .expect("Write request failed");
 
         Ok(())
     }
 
     pub fn delete_folder(&mut self, path: &[usize]) -> Result<()> {
-        remove_child_node(self, path).expect("Delete folder failed");
+        remove_child_object(self, path).expect("Delete folder failed");
 
         Ok(())
     }
@@ -281,7 +281,7 @@ impl DemoFEBackend {
 
         let remove_index = req_pos + req_index;
 
-        remove_child_node(self, &[&path[..], &[remove_index]].concat())
+        remove_child_object(self, &[&path[..], &[remove_index]].concat())
             .expect("Remove request failed");
 
         Ok(())
