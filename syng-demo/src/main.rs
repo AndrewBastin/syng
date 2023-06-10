@@ -11,6 +11,7 @@ use syng::{backend::SyngBackend, delta::apply_delta};
 use syng_demo_common::{CollectionData, RequestData};
 
 use crate::{
+    components::dialogs::PromptDialog,
     remote::{pull_full_from_remote, push_to_remote},
     utils::{get_random_request_content, path_to_string},
 };
@@ -78,6 +79,9 @@ fn App(cx: Scope) -> Element {
 
     let root_colls_len = root_colls.len();
 
+    let move_folder_from_path = use_state(cx, || -> Option<Vec<usize>> { None });
+    let move_req_from_path = use_state(cx, || -> Option<(Vec<usize>, usize)> { None });
+
     let root_colls_tree = root_colls.iter().enumerate().map(|(index, coll)| {
         rsx! {
             Collection {
@@ -104,6 +108,12 @@ fn App(cx: Scope) -> Element {
                 },
                 on_delete_request: move |(path, index): (Vec<usize>, usize)| {
                     backend.write().delete_request(&path, index).expect("Delete request failed");
+                },
+                on_move_folder: move |path| {
+                    move_folder_from_path.set(Some(path));
+                },
+                on_move_request: move |path| {
+                    move_req_from_path.set(Some(path));
                 }
             }
         }
@@ -112,6 +122,48 @@ fn App(cx: Scope) -> Element {
     cx.render(rsx! {
         div {
             style { include_str!("./style.css") }
+
+            PromptDialog {
+                show: move_folder_from_path.is_some(),
+                dialog_title: "Move Folder",
+                message: "Use slash separated path indices",
+                placeholder: "Path",
+
+                on_ok: move |to_path_str: String| {
+                    let to_obj_path = to_path_str.split('/').map(|s| s.parse::<usize>().unwrap()).collect::<Vec<_>>();
+                    let from_folder_path = move_folder_from_path.get().clone().unwrap();
+
+                    backend.with_mut(move |bk| {
+                        bk.move_folder(from_folder_path.as_slice(), to_obj_path.as_slice()).expect("Move failed");
+                    });
+
+                    move_folder_from_path.set(None);
+                },
+                on_cancel: move |_| {
+                    move_folder_from_path.set(None);
+                }
+            }
+
+            PromptDialog {
+                show: move_req_from_path.is_some(),
+                dialog_title: "Move Request",
+                message: "Use slash separated path indices",
+                placeholder: "Path",
+
+                on_ok: move |to_path_str: String| {
+                    let to_obj_path = to_path_str.split('/').map(|s| s.parse::<usize>().unwrap()).collect::<Vec<_>>();
+                    let from_req_path = move_req_from_path.get().clone().unwrap();
+
+                    backend.with_mut(move |bk| {
+                        bk.move_request((from_req_path.0.as_slice(), from_req_path.1), to_obj_path.as_slice()).expect("Move failed");
+                    });
+
+                    move_req_from_path.set(None);
+                },
+                on_cancel: move |_| {
+                    move_req_from_path.set(None);
+                }
+            }
 
             div {
                 class: "debug-panel",

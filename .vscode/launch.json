@@ -1,0 +1,120 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'syng'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=syng"
+        ],
+        "filter": {
+          "name": "syng",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'syng-demo-common'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=syng-demo-common"
+        ],
+        "filter": {
+          "name": "syng-demo-common",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'syng-demo'",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=syng-demo",
+          "--package=syng-demo"
+        ],
+        "filter": {
+          "name": "syng-demo",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'syng-demo'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--bin=syng-demo",
+          "--package=syng-demo"
+        ],
+        "filter": {
+          "name": "syng-demo",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'syng-demo-backend'",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=syng-demo-backend",
+          "--package=syng-demo-backend"
+        ],
+        "filter": {
+          "name": "syng-demo-backend",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'syng-demo-backend'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--bin=syng-demo-backend",
+          "--package=syng-demo-backend"
+        ],
+        "filter": {
+          "name": "syng-demo-backend",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

@@ -9,7 +9,7 @@ use syng::{
     objects::SyngObjectDef,
     tree_ops::{
         add_child_object, get_descendent_object_ids, get_object_at_path, remove_child_object,
-        ChildAdditionPosition,
+        ChildAdditionPosition, update_object,
     },
 };
 
@@ -283,6 +283,99 @@ impl DemoFEBackend {
 
         remove_child_object(self, &[&path[..], &[remove_index]].concat())
             .expect("Remove request failed");
+
+        Ok(())
+    }
+
+    pub fn move_folder(&mut self, path: &[usize], new_path: &[usize]) -> Result<()> {
+        let parent_path = &path[..path.len() - 1];
+        // Get the folder object of the parent
+        let (_, parent_obj) = get_object_at_path(self, parent_path).expect("Parent object not found");
+
+        // Get index of the folder in the parent
+        let folder_index = path.last().unwrap();
+
+        // Get the folder object
+        let (_, folder_obj) = get_object_at_path(self, path).expect("Folder object not found");
+
+        // Get the folder object at the new path
+        let (_, new_folder_obj) =
+            get_object_at_path(self, new_path).expect("New folder object not found");
+
+        // Find last folder position so we can find the location to add to
+        let add_pos = new_folder_obj
+            .children
+            .iter()
+            .enumerate()
+            .find_map(|(index, hash)| {
+                let obj = self
+                    .read_object(hash)
+                    .expect("Folder point search hash failed");
+
+                if obj.fields.get("type") == Some(&"request".to_owned()) {
+                    Some(ChildAdditionPosition::AddAt(index))
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(ChildAdditionPosition::AddToEnd);
+
+        // Update the current parent object to remove the folder
+        let mut new_parent_obj = parent_obj.clone();
+        new_parent_obj.children.remove(*folder_index);
+
+        update_object(self, parent_path, &new_parent_obj).expect("Update parent object failed");
+
+        // Add folder to the new parent
+        add_child_object(
+            self,
+            new_path,
+            &folder_obj,
+            add_pos,
+        );
+
+        Ok(())
+    }
+
+    pub fn move_request(&mut self, (folder_path, req_index): (&[usize], usize), new_path: &[usize]) -> Result<()> {
+        // Get the folder object of the parent
+        let (_, folder_obj) = get_object_at_path(self, folder_path).expect("Folder object not found");
+
+        let req_index_in_folder = folder_obj
+            .children
+            .iter()
+            .enumerate()
+            .find_map(|(index, hash)| {
+                let obj = self
+                    .read_object(hash)
+                    .expect("Folder point search hash failed");
+
+                if obj.fields.get("type") == Some(&"request".to_owned()) {
+                    Some(index + req_index)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(req_index);
+
+        // Get request object
+        let req_obj_id = folder_obj.children[req_index_in_folder].clone();
+
+
+        // Update the folder object to remove the request
+        let mut new_folder_obj = folder_obj.clone();
+        new_folder_obj.children.remove(req_index_in_folder);
+
+        update_object(self, folder_path, &new_folder_obj).expect("Update folder object failed");
+
+        // Get the new folder object
+        let (_, new_folder_obj) = get_object_at_path(self, new_path).expect("New folder object not found");
+
+        // Update the new folder object to add the request to the end
+        let mut new_new_folder_obj = new_folder_obj.clone();
+        new_new_folder_obj.children.push(req_obj_id);
+
+        update_object(self, new_path, &new_new_folder_obj).expect("Update new folder object failed");
 
         Ok(())
     }

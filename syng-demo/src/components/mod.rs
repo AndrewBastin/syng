@@ -4,6 +4,8 @@ use syng_demo_common::{CollectionData, RequestData};
 
 use crate::utils::path_to_string;
 
+pub mod dialogs;
+
 #[derive(Props)]
 pub struct CollectionProps<'a> {
     path: Vec<usize>,
@@ -12,6 +14,10 @@ pub struct CollectionProps<'a> {
     on_delete_folder: EventHandler<'a, Vec<usize>>,
     on_add_request: EventHandler<'a, Vec<usize>>,
     on_delete_request: EventHandler<'a, (Vec<usize>, usize)>,
+    on_move_folder: EventHandler<'a, Vec<usize>>, // (from obj path, to obj path)
+
+    // (from obj path, from req index, to obj path, to req index)
+    on_move_request: EventHandler<'a, (Vec<usize>, usize)>,
 }
 
 pub fn Collection<'a>(cx: Scope<'a, CollectionProps<'a>>) -> Element<'a> {
@@ -39,6 +45,12 @@ pub fn Collection<'a>(cx: Scope<'a, CollectionProps<'a>>) -> Element<'a> {
                 "Delete"
             }
 
+            button {
+                onclick: move |_| cx.props.on_move_folder.call(cx.props.path.clone()),
+
+                "Move"
+            }
+
             div {
                 style: r#"
                     padding-left: 10px;
@@ -59,6 +71,12 @@ pub fn Collection<'a>(cx: Scope<'a, CollectionProps<'a>>) -> Element<'a> {
                         },
                         on_delete_request: move |req_path| {
                             cx.props.on_delete_request.call(req_path);
+                        },
+                        on_move_folder: move |path| {
+                            cx.props.on_move_folder.call(path);
+                        },
+                        on_move_request: move |path| {
+                            cx.props.on_move_request.call(path);
                         }
                     }
                 }
@@ -69,6 +87,9 @@ pub fn Collection<'a>(cx: Scope<'a, CollectionProps<'a>>) -> Element<'a> {
                         req: req,
                         on_delete_request: move |req_path| {
                             cx.props.on_delete_request.call(req_path);
+                        },
+                        on_move_request: move |path| {
+                            cx.props.on_move_request.call(path);
                         }
                     }
                 }
@@ -82,6 +103,9 @@ pub struct RequestProps<'a> {
     path: (Vec<usize>, usize),
     req: &'a RequestData,
     on_delete_request: EventHandler<'a, (Vec<usize>, usize)>,
+
+    // (from obj path, from req index, to obj path, to req index)
+    on_move_request: EventHandler<'a, (Vec<usize>, usize)>,
 }
 
 pub fn Request<'a>(cx: Scope<'a, RequestProps>) -> Element<'a> {
@@ -91,6 +115,13 @@ pub fn Request<'a>(cx: Scope<'a, RequestProps>) -> Element<'a> {
                 "{cx.props.req.title} (Path: {path_to_string(&cx.props.path.0)} req: {cx.props.path.1}) [content: {cx.props.req.content}]"
             }
 
+            button {
+                onclick: move |_| {
+                    cx.props.on_move_request.call(cx.props.path.clone());
+                },
+
+                "Move"
+            }
             button {
                 onclick: move |_| cx.props.on_delete_request.call(cx.props.path.clone()),
 

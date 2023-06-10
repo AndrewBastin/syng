@@ -98,14 +98,10 @@ pub fn update_object(
     let mut last_obj_id = hash.clone();
 
     // Skip 1 because the last object is the actual object
-    for (_, obj) in ancestor_objs.iter().rev().skip(1) {
+    for (index, (_, obj)) in ancestor_objs.iter().enumerate().rev().skip(1) {
         let mut new_obj = obj.clone();
 
-        let index = new_obj.children.iter().position(|obj_id| {
-            return obj_id == &last_obj_id;
-        })?;
-
-        new_obj.children[index] = last_obj_id;
+        new_obj.children[obj_path[index]] = last_obj_id;
 
         let new_hash = backend.write_object(&new_obj).ok()?;
 
