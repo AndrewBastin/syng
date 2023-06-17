@@ -5,6 +5,7 @@ use syng_demo_common::{CollectionData, RequestData};
 use crate::utils::path_to_string;
 
 pub mod dialogs;
+pub mod sync_state_dialog;
 
 #[derive(Props)]
 pub struct CollectionProps<'a> {

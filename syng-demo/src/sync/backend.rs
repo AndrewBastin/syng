@@ -9,13 +9,13 @@ use syng::{
     objects::SyngObjectDef,
     tree_ops::{
         add_child_object, get_descendent_object_ids, get_object_at_path, remove_child_object,
-        ChildAdditionPosition, update_object,
+        update_object, ChildAdditionPosition,
     },
 };
 
 use super::treegen::{generate_object_for_coll, generate_object_for_req, ObjectGen};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DemoFEBackend {
     root_id: Option<String>,
     objects: HashMap<String, SyngObjectDef>,
@@ -80,6 +80,13 @@ impl Default for DemoFEBackend {
 }
 
 impl DemoFEBackend {
+    pub fn get_full_delta(&self) -> SyngDelta {
+        SyngDelta {
+            start_point: None,
+            new_root_node: self.root_id.clone().unwrap(),
+            new_objects: self.objects.clone(),
+        }
+    }
     pub fn apply_full_pull(&mut self, data: &BackendFullPullResult) -> Result<()> {
         for obj in &data.objects {
             self.write_object(&obj).expect("Pull object write failed");
@@ -290,7 +297,8 @@ impl DemoFEBackend {
     pub fn move_folder(&mut self, path: &[usize], new_path: &[usize]) -> Result<()> {
         let parent_path = &path[..path.len() - 1];
         // Get the folder object of the parent
-        let (_, parent_obj) = get_object_at_path(self, parent_path).expect("Parent object not found");
+        let (_, parent_obj) =
+            get_object_at_path(self, parent_path).expect("Parent object not found");
 
         // Get index of the folder in the parent
         let folder_index = path.last().unwrap();
@@ -327,19 +335,19 @@ impl DemoFEBackend {
         update_object(self, parent_path, &new_parent_obj).expect("Update parent object failed");
 
         // Add folder to the new parent
-        add_child_object(
-            self,
-            new_path,
-            &folder_obj,
-            add_pos,
-        );
+        add_child_object(self, new_path, &folder_obj, add_pos);
 
         Ok(())
     }
 
-    pub fn move_request(&mut self, (folder_path, req_index): (&[usize], usize), new_path: &[usize]) -> Result<()> {
+    pub fn move_request(
+        &mut self,
+        (folder_path, req_index): (&[usize], usize),
+        new_path: &[usize],
+    ) -> Result<()> {
         // Get the folder object of the parent
-        let (_, folder_obj) = get_object_at_path(self, folder_path).expect("Folder object not found");
+        let (_, folder_obj) =
+            get_object_at_path(self, folder_path).expect("Folder object not found");
 
         let req_index_in_folder = folder_obj
             .children
@@ -361,7 +369,6 @@ impl DemoFEBackend {
         // Get request object
         let req_obj_id = folder_obj.children[req_index_in_folder].clone();
 
-
         // Update the folder object to remove the request
         let mut new_folder_obj = folder_obj.clone();
         new_folder_obj.children.remove(req_index_in_folder);
@@ -369,13 +376,15 @@ impl DemoFEBackend {
         update_object(self, folder_path, &new_folder_obj).expect("Update folder object failed");
 
         // Get the new folder object
-        let (_, new_folder_obj) = get_object_at_path(self, new_path).expect("New folder object not found");
+        let (_, new_folder_obj) =
+            get_object_at_path(self, new_path).expect("New folder object not found");
 
         // Update the new folder object to add the request to the end
         let mut new_new_folder_obj = new_folder_obj.clone();
         new_new_folder_obj.children.push(req_obj_id);
 
-        update_object(self, new_path, &new_new_folder_obj).expect("Update new folder object failed");
+        update_object(self, new_path, &new_new_folder_obj)
+            .expect("Update new folder object failed");
 
         Ok(())
     }

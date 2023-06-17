@@ -11,7 +11,7 @@ use syng::{backend::SyngBackend, delta::apply_delta};
 use syng_demo_common::{CollectionData, RequestData};
 
 use crate::{
-    components::dialogs::PromptDialog,
+    components::{dialogs::PromptDialog, sync_state_dialog::SyncStateDialog},
     remote::{pull_full_from_remote, push_to_remote},
     utils::{get_random_request_content, path_to_string},
 };
@@ -44,18 +44,6 @@ fn App(cx: Scope) -> Element {
 
     let backend = use_ref(cx, || DemoFEBackend::default());
 
-    let is_repo_even_with_remote = {
-        let backend_root_id = backend.read().get_root_object_id();
-        let last_known_remote_root_id = last_known_remote_root_id.get();
-
-        match (&backend_root_id, last_known_remote_root_id) {
-            (Some(backend_root_id), Some(last_known_remote_root_id)) => {
-                Some(backend_root_id == last_known_remote_root_id)
-            }
-            _ => None,
-        }
-    };
-
     let gen_tree_start = SystemTime::now();
 
     let root_colls = backend
@@ -81,6 +69,8 @@ fn App(cx: Scope) -> Element {
 
     let move_folder_from_path = use_state(cx, || -> Option<Vec<usize>> { None });
     let move_req_from_path = use_state(cx, || -> Option<(Vec<usize>, usize)> { None });
+
+    let show_sync_state_dialog = use_state(cx, || { false });
 
     let root_colls_tree = root_colls.iter().enumerate().map(|(index, coll)| {
         rsx! {
@@ -118,10 +108,19 @@ fn App(cx: Scope) -> Element {
             }
         }
     });
-
+  
     cx.render(rsx! {
         div {
             style { include_str!("./style.css") }
+
+            SyncStateDialog {
+                show: **show_sync_state_dialog,
+                backend: backend.read().clone(),
+                last_synced_point: &last_synced_remote_root_id,
+                on_close: move |()| {
+                    show_sync_state_dialog.set(false)
+                }
+            }
 
             PromptDialog {
                 show: move_folder_from_path.is_some(),
@@ -312,8 +311,10 @@ fn App(cx: Scope) -> Element {
 
                     button {
                         onclick: move |_| {
-                            //
-                        }
+                            
+                        },
+
+                        "See sync state"
                     }
 
 
